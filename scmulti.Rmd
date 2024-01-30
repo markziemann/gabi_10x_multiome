@@ -1,0 +1,292 @@
+---
+title: "Single cell multi-omics"
+author: "Burnet Bioinformatics group"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    fig_width: 7
+    fig_height: 7
+theme: cosmo
+bibliography: references.bib
+csl: vancouver.csl
+---
+
+## Introduction
+
+Joint RNA and ATAC analysis using 10x multiomic technology.
+This workflow is adapted from the [Signac guide](https://stuartlab.org/signac/articles/pbmc_multiomic).
+
+Source code: TBA.
+
+There are datasets in two batches, April and August.
+
+```{r,libs}
+
+library("irlba")
+library("Signac")
+library("Seurat")
+library("hdf5r")
+library("EnsDb.Hsapiens.v86")
+library("BSgenome.Hsapiens.UCSC.hg38")
+library("glmGamPoi")
+library("SeuratDisk") #devtools::install_github("mojaveazure/seurat-disk")
+library("qlcMatrix") #devtools::install_github("cysouw/qlcMatrix")
+
+```
+
+## Load data
+
+Load the RNA and ATAC data.
+
+```{r,load1}
+
+counts <- Read10X_h5("FLW_april/outs/filtered_feature_bc_matrix.h5")
+
+fragpath <- "FLW_april/outs/atac_fragments.tsv.gz"
+
+```
+
+## Get annotations
+
+```{r,anno1}
+
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Hsapiens.v86)
+seqlevels(annotation) <- paste0('chr', seqlevels(annotation))
+annotation
+
+```
+
+## Create a Seurat object
+
+It will contain RNA and ATAC data.
+
+```{r,seurat1}
+
+pbmc <- CreateSeuratObject( counts = counts$`Gene Expression`, assay = "RNA")
+head(pbmc)
+
+pbmc[["ATAC"]] <- CreateChromatinAssay(counts = counts$Peaks,sep = c(":", "-"),
+  fragments = fragpath,annotation = annotation)
+
+pbmc
+
+```
+
+
+## ATAC Quality control
+
+Compute per-cell quality metrics using DNA accessibility data.
+
+```{r,qc1}
+
+DefaultAssay(pbmc) <- "ATAC"
+
+pbmc <- NucleosomeSignal(pbmc)
+pbmc <- TSSEnrichment(pbmc)
+
+VlnPlot(
+  object = pbmc,
+  features = c("nCount_RNA", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal"),
+  ncol = 4,
+  pt.size = 0
+)
+
+```
+
+Remove cells that are outliers for these metrics, as well as cells with low or unusually
+high counts for either the RNA or ATAC assay.
+
+```{r,filt1}
+
+pbmc <- subset(
+  x = pbmc,
+  subset = nCount_ATAC < 100000 &
+    nCount_RNA < 25000 &
+    nCount_ATAC > 1000 &
+    nCount_RNA > 1000 &
+    nucleosome_signal < 2 &
+    TSS.enrichment > 1
+)
+pbmc
+
+```
+
+## Peak calling
+
+Using MACS2.
+We will remove peaks on nonstandard chromosomes and in genomic blacklist regions.
+Then quantify counts in each peak and create a new assay using the MACS2 peak set
+and add it to the Seurat object
+
+```{r,peak1}
+
+peaks <- CallPeaks(pbmc)
+
+peaks <- keepStandardChromosomes(peaks, pruning.mode = "coarse")
+peaks <- subsetByOverlaps(x = peaks, ranges = blacklist_hg38_unified, invert = TRUE)
+
+macs2_counts <- FeatureMatrix(
+  fragments = Fragments(pbmc),
+  features = peaks,
+  cells = colnames(pbmc)
+)
+
+pbmc[["peaks"]] <- CreateChromatinAssay(
+  counts = macs2_counts,
+  fragments = fragpath,
+  annotation = annotation
+)
+
+```
+
+##  Gene expression data processing
+
+We can normalize the gene expression data using SCTransform, and reduce the dimensionality using PCA.
+
+```{r,rnanorm1}
+
+DefaultAssay(pbmc) <- "RNA"
+pbmc <- SCTransform(pbmc)
+pbmc <- RunPCA(pbmc)
+
+```
+
+## DNA accessibility data processing
+
+Here we process the DNA accessibility assay the same way we would process a scATAC-seq dataset,
+by performing latent semantic indexing (LSI).
+
+```{r,atacnorm1}
+
+DefaultAssay(pbmc) <- "peaks"
+pbmc <- FindTopFeatures(pbmc, min.cutoff = 5)
+pbmc <- RunTFIDF(pbmc)
+pbmc <- RunSVD(pbmc)
+
+```
+
+## Annotating cell types
+
+To annotate cell types in the dataset we can transfer cell labels from an existing PBMC reference dataset using
+tools in the Seurat package.
+See the Seurat reference mapping vignette for more information.
+
+We’ll use an annotated PBMC reference dataset from Hao et al. (2020), available for
+[download](https://atlas.fredhutch.org/data/nygc/multimodal/pbmc_multimodal.h5seurat).
+
+Note that the SeuratDisk package is required to load the reference dataset.
+Installation instructions for SeuratDisk can be found here.
+
+Load reference data.
+
+```{r,refdata}
+
+options(timeout=10000)
+
+if (! file.exists("pbmc_multimodal.h5seurat")) {
+download.file("https://atlas.fredhutch.org/data/nygc/multimodal/pbmc_multimodal.h5seurat",
+  destfile="pbmc_multimodal.h5seurat")
+}
+
+reference <- LoadH5Seurat("pbmc_multimodal.h5seurat", assays = list("SCT" = "counts"), reductions = 'spca')
+
+reference <- UpdateSeuratObject(reference)
+
+DefaultAssay(pbmc) <- "SCT"
+
+# transfer cell type labels from reference to query
+transfer_anchors <- FindTransferAnchors(
+  reference = reference,
+  query = pbmc,
+  normalization.method = "SCT",
+  reference.reduction = "spca",
+  recompute.residuals = FALSE,
+  dims = 1:50
+)
+
+predictions <- TransferData(
+  anchorset = transfer_anchors,
+  refdata = reference$celltype.l2,
+  weight.reduction = pbmc[['pca']],
+  dims = 1:50
+)
+
+pbmc <- AddMetaData(
+  object = pbmc,
+  metadata = predictions
+)
+
+# set the cell identities to the cell type predictions
+Idents(pbmc) <- "predicted.id"
+
+```
+
+## Joint UMAP visualization
+
+Using the weighted nearest neighbor methods in Seurat v4, we can compute a joint neighbor graph that
+represent both the gene expression and DNA accessibility measurements.
+
+```{r,jointumap}
+
+# build a joint neighbor graph using both assays
+pbmc <- FindMultiModalNeighbors(
+  object = pbmc,
+  reduction.list = list("pca", "lsi"),
+  dims.list = list(1:50, 2:40),
+  modality.weight.name = "RNA.weight",
+  verbose = TRUE
+)
+
+# build a joint UMAP visualization
+pbmc <- RunUMAP(
+  object = pbmc,
+  nn.name = "weighted.nn",
+  assay = "RNA",
+  verbose = TRUE
+)
+
+DimPlot(pbmc, label = TRUE, repel = TRUE, reduction = "umap") + NoLegend()
+
+```
+
+## Linking peaks to genes
+
+For each gene, we can find the set of peaks that may regulate the gene by by computing the correlation between gene
+expression and accessibility at nearby peaks, and correcting for bias due to GC content, overall accessibility,
+and peak size.
+See the [Signac paper](https://www.biorxiv.org/content/10.1101/2020.11.09.373613v1) for a full description of the
+method we use to link peaks to genes.
+
+Running this step on the whole genome can be time consuming, so here we demonstrate peak-gene links for a subset of
+genes as an example.
+The same function can be used to find links for all genes by omitting the genes.use parameter.
+
+
+```{r,peaklink}
+
+DefaultAssay(pbmc) <- "peaks"
+
+# first compute the GC content for each peak
+pbmc <- RegionStats(pbmc, genome = BSgenome.Hsapiens.UCSC.hg38)
+
+# link peaks to genes
+pbmc <- LinkPeaks(
+  object = pbmc,
+  peak.assay = "peaks",
+  expression.assay = "SCT"
+)
+
+```
+
+
+## Session information
+
+Show versions of packages and key dependancies.
+
+```{r,sessioninfo}
+
+sessionInfo()
+
+```

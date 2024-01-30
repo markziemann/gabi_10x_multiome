@@ -1,0 +1,5 @@
+fastqs,sample,library_type
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/april/raw-data/gabriella_khoury_human_scmultiome_april_2022/gex/220426_VH00362_92_AAAWLTCM5/fastq/FLW3,FLW3_GEX,Gene Expression
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/april/raw-data/gabriella_khoury_human_scmultiome_april_2022/gex/220426_VH00362_92_AAAWLTCM5/fastq/FLW5,FLW5_GEX,Gene Expression
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/april/raw-data/gabriella_khoury_human_scmultiome_april_2022/atac/220421_VH00362_90_AAAWMWMM5/fastq/FLW3,FLW3_ATAC,Chromatin Accessibility
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/april/raw-data/gabriella_khoury_human_scmultiome_april_2022/atac/220421_VH00362_90_AAAWMWMM5/fastq/FLW5,FLW5_ATAC,Chromatin Accessibility

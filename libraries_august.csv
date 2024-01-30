@@ -1,0 +1,11 @@
+fastqs,sample,library_type
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/gex/fastq/1Recov3M,1Recov3M,Gene Expression
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/gex/fastq/2Recov12M,2Recov12M,Gene Expression
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/gex/fastq/2Recov3M,2Recov3M,Gene Expression
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/gex/fastq/MDC8,MDC8,Gene Expression
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/gex/fastq/MMC7,MMC7,Gene Expression
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/atac/fastq/1Recov3M,1Recov3M,Chromatin Accessibility
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/atac/fastq/2Recov12M,2Recov12M,Chromatin Accessibility
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/atac/fastq/2Recov3M,2Recov3M,Chromatin Accessibility
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/atac/fastq/MDC8,MDC8,Chromatin Accessibility
+/home/mark.ziemann@domain.internal.burnet.edu.au/projects/gabi/fastq/august/raw-data/gabriella_khoury_human_scmultiome_aug_2022/atac/fastq/MMC7,MMC7,Chromatin Accessibility
