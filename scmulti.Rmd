@@ -40,11 +40,63 @@ library("qlcMatrix") #devtools::install_github("cysouw/qlcMatrix")
 
 Load the RNA and ATAC data.
 
+Annotate genes by organism.
+
 ```{r,load1}
 
 counts <- Read10X_h5("FLW_april/outs/filtered_feature_bc_matrix.h5")
-
 fragpath <- "FLW_april/outs/atac_fragments.tsv.gz"
+
+```
+
+Annotate genes by organism.
+
+```{r,organno1}
+
+#Mycoplasma pneumoniae chromosome
+MPstart="gene-AXA72_00005"
+MPend="gene-AXA72_03910"
+MPgenes <- rownames(counts$`Gene Expression`)[which(rownames(counts$`Gene Expression`) == MPstart) : which(rownames(counts$`Gene Expression`) == MPend)]
+MPstart="dnaA"
+MPend="gene-EXC43_RS04465"
+MPplas1genes <- rownames(counts$`Gene Expression`)[which(rownames(counts$`Gene Expression`) == MPstart) : which(rownames(counts$`Gene Expression`) == MPend)]
+MPstart="dnaN"
+MPend="gene-EXC43_RS04315"
+MPplas2genes <- rownames(counts$`Gene Expression`)[which(rownames(counts$`Gene Expression`) == MPstart) : which(rownames(counts$`Gene Expression`) == MPend)]
+MPgenes_full <- unique(c(MPgenes,MPplas1genes,MPplas2genes))
+str(MPgenes_full)
+table(colSums(as.data.frame(counts$`Gene Expression`[rownames(counts$`Gene Expression`) %in% MPgenes_full,])))
+
+#lambda
+Lstart="nu1"
+Lend="orf206b"
+Lgenes <- rownames(counts$`Gene Expression`)[which(rownames(counts$`Gene Expression`) == Lstart) : which(rownames(counts$`Gene Expression`) == Lend)]
+str(Lgenes)
+table(colSums(as.data.frame(counts$`Gene Expression`[rownames(counts$`Gene Expression`) %in% Lgenes,])))
+
+#HHV5
+H5start="RL10"
+H5end="RL8A"
+H5genes <- rownames(counts$`Gene Expression`)[which(rownames(counts$`Gene Expression`) == H5start) : which(rownames(counts$`Gene Expression`) == H5end)]
+str(H5genes)
+table(colSums(as.data.frame(counts$`Gene Expression`[rownames(counts$`Gene Expression`) %in% H5genes,])))
+
+#Human gammaherpesvirus 4 (EBV)
+Estart="BNRF1"
+Eend="LMP-1"
+Egenes <- rownames(counts$`Gene Expression`)[which(rownames(counts$`Gene Expression`) == Estart) : which(rownames(counts$`Gene Expression`) == Eend)]
+str(Egenes)
+table(colSums(as.data.frame(counts$`Gene Expression`[rownames(counts$`Gene Expression`) %in% Egenes,])))
+
+#Human gene expression
+HUstart="MIR1302-2HG"
+HUend="LINC00266-4P"
+HUgenes <- rownames(counts$`Gene Expression`)[which(rownames(counts$`Gene Expression`) == HUstart) : which(rownames(counts$`Gene Expression`) == HUend)]
+str(HUgenes)
+
+mycolsums <- colSums(as.data.frame(counts$`Gene Expression`[rownames(counts$`Gene Expression`) %in% HUgenes,]))
+str(mycolsums)
+summary(mycolsums)
 
 ```
 
@@ -280,6 +332,105 @@ pbmc <- LinkPeaks(
 
 ```
 
+We can visualize these links using the `CoveragePlot()` function, or alternatively we could use the `CoverageBrowser()`
+function in an interactive analysis.
+
+```{r,peak2geneviz}
+
+idents.plot <- c("B naive", "B intermediate", "B memory",
+                 "CD14 Mono", "CD16 Mono", "CD8 TEM", "CD8 Naive")
+
+p1 <- CoveragePlot(
+  object = pbmc,
+  region = "MS4A1",
+  features = "MS4A1",
+  expression.assay = "SCT",
+  idents = idents.plot,
+  extend.upstream = 500,
+  extend.downstream = 10000
+)
+
+p2 <- CoveragePlot(
+  object = pbmc,
+  region = "LYZ",
+  features = "LYZ",
+  expression.assay = "SCT",
+  idents = idents.plot,
+  extend.upstream = 8000,
+  extend.downstream = 5000
+)
+
+patchwork::wrap_plots(p1, p2, ncol = 1)
+
+```
+
+## Gene activity - looking for pathogen gene expression
+
+```{r,activity1}
+
+gene.activities <- GeneActivity(pbmc)
+
+# add the gene activity matrix to the Seurat object as a new assay and normalize it
+pbmc[['RNA']] <- CreateAssayObject(counts = gene.activities)
+pbmc <- NormalizeData(
+  object = pbmc,
+  assay = 'RNA',
+  normalization.method = 'LogNormalize',
+  scale.factor = median(pbmc$nCount_RNA)
+)
+
+
+```
+
+Now we can visualize the activities of canonical marker genes.
+
+```{r,markerviz1}
+
+DefaultAssay(pbmc) <- 'RNA'
+
+FeaturePlot(
+  object = pbmc,
+  features = c('MS4A1', 'CD3D', 'LEF1', 'NKG7', 'TREM1', 'LYZ'),
+  pt.size = 0.1,
+  max.cutoff = 'q95',
+  ncol = 3
+)
+
+```
+
+Now we can visualize the activities of pathogen genes.
+
+CP014267.1 = Mycoplasma pneumoniae chromosome
+
+NZ_LR214945.1 = Mycoplasmoides pneumoniae strain NCTC10119 plasmid 1
+
+NZ_LR214946.1 = Mycoplasmoides pneumoniae strain NCTC10119 plasmid 2
+
+NC_001416.1 = lambda phage
+
+NC_006273.2 = Human herpesvirus 5
+
+NC_007605.1 = Human gammaherpesvirus 4
+
+```{r,markerviz2}
+
+FeaturePlot(
+  object = pbmc,
+  features = c('MS4A1', 'CD3D', 'LEF1', 'NKG7', 'TREM1', 'LYZ'),
+  pt.size = 0.1,
+  max.cutoff = 'q95',
+  ncol = 3
+)
+
+```
+
+## Save data
+
+```{r,save}
+
+save.image("scmulti.Rdata")
+
+```
 
 ## Session information
 
