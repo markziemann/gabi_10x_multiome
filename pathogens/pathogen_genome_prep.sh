@@ -1,6 +1,7 @@
 #!/bin/bash
 
 rm pathogen.fa pathogen.gtf
+rm `find . | grep rev.fna`
 
 for FNA in $(find ncbi_dataset/data | grep fna | grep -v cds | grep -v rev) ; do
 
@@ -8,25 +9,20 @@ for FNA in $(find ncbi_dataset/data | grep fna | grep -v cds | grep -v rev) ; do
 
   revseq $FNA $REV
 
-  sed -i '/>/s/ /fwd /' $FNA
-  sed -i '/>/s/ /rev /' $REV
+  sed '/>/s/ /fwd /' $FNA >> pathogen.fa
+  sed '/>/s/ /rev /' $REV >> pathogen.fa
 
+done
 
-  cat $FNA $REV > pathogen.fa
+samtools faidx pathogen.fa
 
-  END=$(sed 1d $FNA | wc -c )
-
+for CONTIG in $(cut -f1 pathogen.fa.fai ) ; do
+  START=1
+  END=$(samtools faidx pathogen.fa $CONTIG | sed 1d | tr -d '\n' | wc -c)
   CONTIGNAME=$(head -1 $FNA | cut -d ' ' -f1 | tr -d '>')
-
-  echo "$CONTIGNAME custom transcript 1 $END . + . gene_id@\"${CONTIGNAME}.fwd\";@transcript_id@\"${CONTIGNAME}.fwd\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
-  echo "$CONTIGNAME custom exon 1 $END . + . gene_id@\"${CONTIGNAME}.fwd\";@transcript_id@\"${CONTIGNAME}.fwd\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
-  echo "$CONTIGNAME custom gene 1 $END . + . gene_id@\"${CONTIGNAME}.fwd\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
-
-  CONTIGNAME=$(head -1 $REV | cut -d ' ' -f1 | tr -d '>')
-
-  echo "$CONTIGNAME custom transcript 1 $END . - . gene_id@\"${CONTIGNAME}.rev\";@transcript_id@\"${CONTIGNAME}.rev\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
-  echo "$CONTIGNAME custom exon 1 $END . - . gene_id@\"${CONTIGNAME}.rev\";@transcript_id@\"${CONTIGNAME}.rev\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
-  echo "$CONTIGNAME custom gene 1 $END . - . gene_id@\"${CONTIGNAME}.rev\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
+  echo "${CONTIG} custom transcript 1 $END . + . gene_id@\"${CONTIG}\";@transcript_id@\"${CONTIG}\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
+  echo "${CONTIG} custom exon 1 $END . + . gene_id@\"${CONTIG}\";@transcript_id@\"${CONTIG}\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
+  echo "${CONTIG} custom gene 1 $END . + . gene_id@\"${CONTIG}\";" | tr ' ' '\t' | tr '@' ' ' >> pathogen.gtf
 
 done
 
