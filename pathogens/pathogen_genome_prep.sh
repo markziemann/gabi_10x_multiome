@@ -1,11 +1,16 @@
 #!/bin/bash
 
 rm pathogen.fa pathogen.gtf
+
 for FNA in $(find ncbi_dataset/data | grep fna | grep -v cds | grep -v rev) ; do
 
   REV=$(echo $FNA | sed 's/.fna/rev.fna/')
 
   revseq $FNA $REV
+
+  sed -i '/>/s/ /fwd /' $FNA
+  sed -i '/>/s/ /rev /' $REV
+
 
   cat $FNA $REV > pathogen.fa
 
