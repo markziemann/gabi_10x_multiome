@@ -10,7 +10,7 @@ output:
     fig_height: 7
 theme: cosmo
 bibliography: references.bib
-csl: vancouver.csl
+csl: harvard.csl
 ---
 
 ## Introduction
