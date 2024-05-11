@@ -1,0 +1,497 @@
+---
+title: "Gabi scRNA-seq data analysis"
+author: "Burnet Bioinformatics group"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    fig_width: 7
+    fig_height: 7
+theme: cosmo
+---
+
+## Introduction
+
+Here we will be looking at gene expression in B-cells.
+Here are the sample descriptions:
+
+* FLW3: healthy no covid
+
+* FLW5: healthy no covid
+
+* 1Recov3M: had covid post-3 months
+
+* 2Recov3M: had covid, same person,
+
+* 2Recov12M: had covid, same person 9 months later
+
+* MDC8: had covid (sample ~3 month post, was treated with steroids)
+
+* MMC7: had covid (sample ~3 month post, was treated with steroids).
+
+```{r,libs}
+
+suppressPackageStartupMessages({
+  library("dplyr")
+  library("ggplot2")
+  library("plyr")
+  library("Seurat")
+  library("hdf5r")
+  library("SingleCellExperiment")
+  library("parallel")
+  library("stringi")
+  library("beeswarm")
+  library("muscat")
+  library("DESeq2")
+  library("mitch")
+  library("harmony")
+  library("celldex")
+  library("SingleR")
+  library("kableExtra")
+  library("gplots")
+})
+
+```
+
+## Load data
+
+
+Load the h5 matrices.
+
+```{r,load1}
+
+flw3 <- Read10X_h5("FLW3/outs/filtered_feature_bc_matrix.h5")
+flw3 <- flw3[[1]]
+colnames(flw3) <- paste("flw3",colnames(flw3))
+flw3_metadata <- data.frame(colnames(flw3))
+
+flw5 <-  Read10X_h5("FLW5/outs/filtered_feature_bc_matrix.h5")
+flw5 <- flw5[[1]]
+colnames(flw5) <- paste("flw5",colnames(flw5))
+flw5_metadata <- data.frame(colnames(flw5))
+
+X1Recov3M <- Read10X_h5("1Recov3M/outs/filtered_feature_bc_matrix.h5")
+X1Recov3M <- X1Recov3M[[1]]
+colnames(X1Recov3M) <- paste("X1Recov3M",colnames(X1Recov3M))
+X1Recov3M_metadata <- data.frame(colnames(X1Recov3M))
+
+X2Recov12M <- Read10X_h5("2Recov12M/outs/filtered_feature_bc_matrix.h5")
+X2Recov12M <- X2Recov12M[[1]]
+colnames(X2Recov12M) <- paste("X2Recov12M",colnames(X2Recov12M))
+X2Recov12M_metadata <- data.frame(colnames(X2Recov12M))
+
+X2Recov3M <- Read10X_h5("2Recov3M/outs/filtered_feature_bc_matrix.h5")
+X2Recov3M <- X2Recov3M[[1]]
+colnames(X2Recov3M) <- paste("X2Recov3M",colnames(X2Recov3M))
+X2Recov3M_metadata <- data.frame(colnames(X2Recov3M))
+
+MDC8 <- Read10X_h5("MDC8/outs/filtered_feature_bc_matrix.h5")
+MDC8 <- MDC8[[1]]
+colnames(MDC8) <- paste("MDC8",colnames(MDC8))
+MDC8_metadata <- data.frame(colnames(MDC8))
+
+MMC7 <- Read10X_h5("MMC7/outs/filtered_feature_bc_matrix.h5")
+MMC7 <- MMC7[[1]]
+colnames(MMC7) <- paste("MMC7",colnames(MMC7))
+MMC7_metadata <- data.frame(colnames(MMC7))
+
+```
+
+Analyse the data for quality.
+Look at the depth of quantification per cell.
+
+```{r,qc1}
+
+message("FLW3")
+dim(flw3)
+summary(colSums(flw3))
+sum(flw3)
+
+message("FLW5")
+dim(flw5)
+summary(colSums(flw5))
+sum(flw5)
+
+message("X1Recov3M")
+dim(X1Recov3M)
+summary(colSums(X1Recov3M))
+sum(X1Recov3M)
+
+message("X2Recov12M")
+dim(X2Recov12M)
+summary(colSums(X2Recov12M))
+sum(X2Recov12M)
+
+message("X2Recov3M")
+dim(X2Recov3M)
+summary(colSums(X2Recov3M))
+sum(X2Recov3M)
+
+message("MDC8")
+dim(MDC8)
+summary(colSums(MDC8))
+sum(MDC8)
+
+message("MMC7")
+dim(MMC7)
+summary(colSums(MMC7))
+sum(MMC7)
+
+```
+
+FLW3 has 8k cells and FLW5 has 4k.
+Median seq depth is also significantly higher for FLW5.
+FLW1 has 50% more reads as compared to FLW5.
+
+Filter to remove cells with fewer than 100 reads.
+
+```{r,filter1}
+
+flw3 <- flw3[,colSums(flw3)>=100]
+flw5 <- flw5[,colSums(flw5)>=100]
+X1Recov3M <- X1Recov3M[,colSums(X1Recov3M)>=100]
+X2Recov12M <- X2Recov12M[,colSums(X2Recov12M)>=100]
+X2Recov3M <- X2Recov3M[,colSums(X2Recov3M)>=100]
+MDC8 <- MDC8[,colSums(MDC8)>=100]
+MMC7 <- MMC7[,colSums(MMC7)>=100]
+
+```
+
+Rename cells by sample origin, and join.
+
+```{r,rename1}
+
+comb <- cbind(flw3,flw5,X1Recov3M,X2Recov3M,X2Recov12M,MDC8,MMC7)
+
+cellmetadata <- as.data.frame(colnames(comb))
+colnames(cellmetadata) = "cell_id"
+cellmetadata$library <-sapply(strsplit(cellmetadata[,1]," "),"[[",1)
+
+comb <- CreateSeuratObject(counts = comb, project = "bcell", min.cells = 5, meta.data = cellmetadata)
+
+
+```
+
+Normalise scRNA-seq data.
+
+```{r,normalise1}
+
+comb <- NormalizeData(comb)
+
+comb <- FindVariableFeatures(comb, selection.method = "vst", nfeatures = 2000)
+
+comb <- ScaleData(comb)
+comb <- RunPCA(comb, features = VariableFeatures(object = comb), npcs = 20)
+comb <- RunHarmony(comb,"library")
+
+DimHeatmap(comb, dims = 1:6, cells = 500, balanced = TRUE)
+ElbowPlot(comb)
+#comb <- JackStraw(comb, num.replicate = 100)
+comb <- FindNeighbors(comb, dims = 1:5)
+comb <- FindClusters(comb, algorithm = 3, resolution = 0.35, verbose = FALSE)
+comb <- RunUMAP(comb, dims = 1:5)
+DimPlot(comb, reduction = "umap")
+
+#comb <- FindNeighbors(comb, dims = 1:10)
+#comb <- FindClusters(comb, algorithm = 3, resolution = 0.5, verbose = FALSE)
+#comb <- RunUMAP(comb, dims = 1:10)
+#DimPlot(comb, reduction = "umap")
+
+```
+
+Look at the prominent cell markers.
+
+```{r,assign}
+
+message("Naive CD4+ T") # 1,3,5,6,7
+VlnPlot(comb, features = c("IL7R", "CCR7"))
+
+message("CD14+ Mono")
+VlnPlot(comb, features = c("CD14", "LYZ"))
+
+message("Memory CD4+")
+VlnPlot(comb, features = c("IL7R", "S100A4"))
+
+message("B") # 2,7
+VlnPlot(comb, features = c("MS4A1"))
+
+message("CD8+ T") #2
+VlnPlot(comb, features = c("CD8A"))
+
+message("FCGR3A+ Mono") #?
+VlnPlot(comb, features = c("FCGR3A", "MS4A7"))
+
+message("NK") # 2,5,6,7?
+VlnPlot(comb, features = c("GNLY", "NKG7"))
+
+message("DC") # 7?
+VlnPlot(comb, features = c("FCER1A", "CST3"))
+
+message("Platelet") #6
+VlnPlot(comb, features = c("PPBP"))
+
+new.cluster.ids <- c("Naive CD4 T", "CD14+ Mono", "Memory CD4 T", "B", "CD8 T", "FCGR3A+ Mono",
+    "NK", "DC", "Platelet")
+
+FeaturePlot(comb, features = c("IL7R","CCR7","CD14","LYZ","S100A4","MS4A1", "CD8A" ,
+  "FCGR3A", "MS4A7", "GNLY", "NKG7", "FCER1A", "CST3", "PPBP","CD3E" , "CD19"))
+
+# b calls
+FeaturePlot(comb, features = c("CD19","CD27","CD38","CD24","CR2", "CD34", "MME", "IGH", "MS4A1"))
+
+#names(new.cluster.ids) <- levels(comb)
+
+```
+
+## Cell Type Annotation
+
+From Turner Lab:  Create a reference using the monaco immune database.
+The Monaco reference consists of bulk RNA-seq samples of sorted immune cell populations from
+GSE107011 (Monaco et al. 2019). (from the CellDex documentation)
+
+```{r,monaco}
+
+ref <- celldex::MonacoImmuneData()
+
+DefaultAssay(comb) <- "RNA"
+comb2 <- as.SingleCellExperiment(comb)
+
+lc <- logcounts(comb2)
+
+pred_imm_broad <- SingleR(test=comb2, ref=ref,
+                          labels=ref$label.main)
+
+head(pred_imm_broad)
+table(pred_imm_broad$pruned.labels)
+
+cellmetadata$label <- pred_imm_broad$pruned.labels
+
+pred_imm_fine <- SingleR(test=comb2, ref=ref,
+                          labels=ref$label.fine)
+head(pred_imm_fine)
+table(pred_imm_fine$pruned.labels)
+
+cellmetadata$finelabel <- pred_imm_fine$pruned.labels
+
+col_pal <- c('#e31a1c', '#ff7f00', "#999900", '#cc00ff', '#1f78b4', '#fdbf6f',
+             '#33a02c', '#fb9a99', "#a6cee3", "#cc6699", "#b2df8a", "#99004d", "#66ff99",
+             "#669999", "#006600", "#9966ff", "#cc9900", "#e6ccff", "#3399ff", "#ff66cc",
+             "#ffcc66", "#003399")
+
+annot_df <- data.frame(
+  barcodes = rownames(pred_imm_broad),
+  monaco_broad_annotation = pred_imm_broad$labels,
+  monaco_broad_pruned_labels = pred_imm_broad$pruned.labels,
+  monaco_fine_annotation = pred_imm_fine$labels,
+  monaco_fine_pruned_labels = pred_imm_fine$pruned.labels
+)
+
+meta_inf <- comb@meta.data
+meta_inf$cell_barcode <- colnames(comb)
+
+meta_inf <- meta_inf %>% dplyr::left_join(y = annot_df,
+                                          by = c("cell_barcode" = "barcodes"))
+rownames(meta_inf) <- colnames(lc)
+
+comb@meta.data <- meta_inf
+
+DimPlot(comb, label=TRUE, group.by = "monaco_broad_annotation", reduction = "umap",
+  cols = col_pal, pt.size = 0.5) + ggtitle("Annotation With the Monaco Reference Database")
+
+```
+
+Extract B cells
+
+```{r,heat1}
+
+bcells <- comb[,which(meta_inf$monaco_broad_annotation == "B cells")]
+
+bcells_metainf <- meta_inf[which(meta_inf$monaco_broad_annotation == "B cells"),]
+
+# remove non bcells
+bcells_metainf <- bcells_metainf[grep("B cells",bcells_metainf$monaco_fine_annotation),]
+bcells <- bcells[,which(colnames(bcells) %in% rownames(bcells_metainf))]
+
+bcells <- FindVariableFeatures(bcells, selection.method = "vst", nfeatures = 2000)
+
+bcells <- RunPCA(bcells, features = VariableFeatures(object = bcells))
+
+DimHeatmap(bcells, dims = 1:2, cells = 500, balanced = TRUE)
+
+DimHeatmap(bcells, dims = 3:4, cells = 500, balanced = TRUE)
+
+ElbowPlot(bcells)
+#comb <- JackStraw(comb, num.replicate = 100)
+bcells <- FindNeighbors(bcells, dims = 1:4)
+
+bcells <- FindClusters(bcells, algorithm = 3, resolution = 0.3, verbose = FALSE)
+
+bcells <- RunUMAP(bcells, dims = 1:4)
+
+DimPlot(bcells, reduction = "umap", label=TRUE,)
+
+DimPlot(bcells, group.by="monaco_fine_annotation" , reduction = "umap", label=TRUE,)
+
+bcells.markers <- FindAllMarkers(bcells, only.pos = TRUE)
+
+bcells.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+bcells.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+DoHeatmap(bcells, features = top10$gene) + NoLegend()
+
+```
+
+Analyse differences between samples in B cells
+
+```{r,heat2}
+
+bcells@meta.data$covid <- grepl("M",bcells@meta.data$library)
+Idents(bcells) <- "covid"
+
+covid.de <- FindMarkers(bcells, ident.1 = "TRUE", ident.2 = "FALSE", verbose = TRUE)
+head(covid.de,20)
+
+```
+
+Remove chrX and chrY genes
+
+Shell command:
+
+zcat gencode.v44.annotation.gtf.gz | grep chrX | cut -f9 | sed 's/gene_name /\n@/' | grep @ | cut -d '"' -f2 | uniq | sort -u > chrX_genes.txt
+
+zcat gencode.v44.annotation.gtf.gz | grep chrY | cut -f9 | sed 's/gene_name /\n@/' | grep @ | cut -d '"' -f2 | uniq | sort -u > chrY_genes.txt
+
+```{r,removeX}
+
+chrx <- readLines("ref/chrX_genes.txt")
+chry <- readLines("ref/chrY_genes.txt")
+
+covid.de <- covid.de[which(! rownames(covid.de) %in% chrx),]
+covid.de <- covid.de[which(! rownames(covid.de) %in% chry),]
+
+head(subset(covid.de,avg_log2FC>0),20) %>%
+  kbl(caption="Upregulated in B cells after covid") %>%
+  kable_paper("hover", full_width = F)
+
+head(subset(covid.de,avg_log2FC<0),20) %>%
+  kbl(caption="Downregulated in B cells after covid") %>%
+  kable_paper("hover", full_width = F)
+
+VlnPlot(bcells, features <- c('DUSP1','CXCR4','PELI1','HLA-DQA2'),
+  idents = c("FALSE", "TRUE"), group.by = "covid", ncol = 2)
+
+VlnPlot(bcells, features <- c('ARL17B','GPM6A','RGS7','AC007368.1'),
+  idents = c("FALSE", "TRUE"), group.by = "covid", ncol = 2)
+
+```
+
+Volcano
+
+```{r,volc1}
+
+par(mar=c(5.1, 4.1, 4.1, 2.1))
+
+HEADER="Effect of COVID infection on B cells"
+plot(covid.de$avg_log2FC, -log10(covid.de$p_val),xlab="log2FC",ylab="-log10(p val)",pch=19,cex=0.8,main=HEADER)
+sig <- subset(covid.de, p_val_adj<0.05)
+points(sig$avg_log2FC, -log10(sig$p_val),pch=19,cex=0.8,col="red")
+up=nrow(subset(sig,avg_log2FC>0))
+dn=nrow(subset(sig,avg_log2FC<0))
+nsig=nrow(sig)
+ntot=nrow(covid.de)
+SUBHEADER=paste("Total=",ntot,"genes;",nsig,"@5% FDR;",up,"up;",dn,"down")
+mtext(SUBHEADER)
+
+```
+
+Heatmap of top genes.
+
+```{r,heat3}
+
+top <- rownames(head(covid.de,15))
+
+mx <- bcells[["RNA"]]["data"]
+dim(mx)
+mx <- mx[which(rownames(mx) %in% top),]
+dim(mx)
+colfunc <- colorRampPalette(c("blue", "white", "red"))
+colsidecols <- gsub("3","orange",gsub("2","gray", as.character(as.numeric(bcells@meta.data$covid)+2)))
+
+heatmap.2(as.matrix(mx),col=colfunc(25), scale="row",trace="none",cexRow=0.8,
+  cexCol=0.01,dendrogram="none",ColSideColors=colsidecols)
+
+```
+
+Pseudobulk
+
+```{r,pseudo1}
+
+pseudo_bcells <- AggregateExpression(bcells, assays = "RNA", return.seurat = T, group.by = "library")
+Idents(pseudo_bcells) <- c("FALSE","FALSE","TRUE","TRUE","TRUE","TRUE","TRUE")
+
+pseudo_bcells@meta.data$covid <- c("FALSE","FALSE","TRUE","TRUE","TRUE","TRUE","TRUE")
+
+mx2 <- pseudo_bcells[["RNA"]]["counts"]
+mx2 <- as.matrix(mx2)
+dim(mx2)
+mx2f <- mx2[which(rowMeans(mx2)>=10),]
+dim(mx2f)
+
+dds <- DESeqDataSetFromMatrix(countData = mx2f , colData = pseudo_bcells@meta.data , design = ~ covid )
+res <- DESeq(dds)
+z<- results(res)
+vsd <- vst(dds, blind=FALSE)
+zz<-cbind(as.data.frame(z),assay(vsd))
+dge<-as.data.frame(zz[order(zz$pvalue),])
+
+head(subset(dge,log2FoldChange>0),20) %>%
+  kbl(caption="Upregulated in B cells after covid") %>%
+  kable_paper("hover", full_width = F)
+
+head(subset(dge,log2FoldChange<0),20) %>%
+  kbl(caption="Downregulated in B cells after covid") %>%
+  kable_paper("hover", full_width = F)
+
+VlnPlot(bcells, features <- c('DUSP1','TXNDC5','JUNB','YBX3'),
+  idents = c("FALSE", "TRUE"), group.by = "covid", ncol = 2)
+
+VlnPlot(bcells, features <- c('SOX5','LINC02550','MSR1','GALNTL6'),
+  idents = c("FALSE", "TRUE"), group.by = "covid", ncol = 2)
+
+```
+
+More heat
+
+```{r,heat4}
+
+top <- rownames(head(dge,20))
+
+rpm <- apply(mx2f,2,function(x) {x/sum(x)*1000000} )
+
+hm <- rpm[rownames(rpm) %in% top,]
+
+colsidecols <- gsub("TRUE","orange",gsub("FALSE","gray",pseudo_bcells@meta.data$covid))
+
+heatmap.2(hm,col=colfunc(25), scale="row",trace="none",cexRow=0.8,
+  cexCol=0.01,dendrogram="none",ColSideColors=colsidecols)
+
+heatmap.2(hm,col=colfunc(25), scale="row",trace="none",cexRow=1.2,
+  cexCol=1.2,dendrogram="none",ColSideColors=colsidecols,mar=c(8,10),
+  main="B cell genes after COVID")
+
+```
+
+## Session information
+
+```{r,session}
+
+sessionInfo()
+
+```
