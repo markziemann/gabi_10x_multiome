@@ -50,6 +50,7 @@ suppressPackageStartupMessages({
   library("SingleR")
   library("kableExtra")
   library("gplots")
+  library("eulerr")
 })
 
 ```
@@ -479,12 +480,34 @@ hm <- rpm[rownames(rpm) %in% top,]
 
 colsidecols <- gsub("TRUE","orange",gsub("FALSE","gray",pseudo_bcells@meta.data$covid))
 
-heatmap.2(hm,col=colfunc(25), scale="row",trace="none",cexRow=0.8,
-  cexCol=0.01,dendrogram="none",ColSideColors=colsidecols)
-
 heatmap.2(hm,col=colfunc(25), scale="row",trace="none",cexRow=1.2,
   cexCol=1.2,dendrogram="none",ColSideColors=colsidecols,mar=c(8,10),
   main="B cell genes after COVID")
+
+```
+
+
+```{r,bcellmeta}
+
+table(bcells@meta.data$seurat_clusters)
+table(bcells@meta.data$monaco_fine_annotation)
+table(paste(bcells@meta.data$seurat_clusters,bcells@meta.data$monaco_fine_annotation))
+
+bcellseuratclusters <- lapply(unique(bcells@meta.data$seurat_clusters),function(x) {
+  rownames(bcells@meta.data[which(bcells@meta.data$seurat_clusters == x),])
+})
+
+names(bcellseuratclusters) <- paste("S",unique(bcells@meta.data$seurat_clusters),sep="")
+
+bcellsubtypes <- lapply(unique(bcells@meta.data$monaco_fine_annotation),function(x) {
+  rownames(bcells@meta.data[which(bcells@meta.data$monaco_fine_annotation == x),])
+})
+
+names(bcellsubtypes) <- unique(bcells@meta.data$monaco_fine_annotation)
+
+v1 <- c(bcellseuratclusters,bcellsubtypes)
+
+plot(euler(v1),quantities = list(cex = 1.0), labels = list(cex = 1.5))
 
 ```
 
