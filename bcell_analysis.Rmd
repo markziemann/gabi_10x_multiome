@@ -238,10 +238,11 @@ new.cluster.ids <- c("Naive CD4 T", "CD14+ Mono", "Memory CD4 T", "B", "CD8 T", 
 FeaturePlot(comb, features = c("IL7R","CCR7","CD14","LYZ","S100A4","MS4A1", "CD8A" ,
   "FCGR3A", "MS4A7", "GNLY", "NKG7", "FCER1A", "CST3", "PPBP","CD3E" , "CD19"))
 
-# b calls
-FeaturePlot(comb, features = c("CD19","CD27","CD38","CD24","CR2", "CD34", "MME", "IGH", "MS4A1"))
-
-#names(new.cluster.ids) <- levels(comb)
+# b cell markers
+FeaturePlot(comb, features = c("CD19","CD27","CD38","CD24"))
+FeaturePlot(comb, features = c("CR2", "CD34", "MME", "MS4A1"))
+FeaturePlot(comb, features = c("MZB1", "CXCR3", "FCRL5", "TBX21"))
+FeaturePlot(comb, features = c("CCR6", "ITGAX","MX1","BST2"))
 
 ```
 
@@ -307,11 +308,13 @@ Extract B cells
 ```{r,heat1}
 
 bcells <- comb[,which(meta_inf$monaco_broad_annotation == "B cells")]
-
 bcells_metainf <- meta_inf[which(meta_inf$monaco_broad_annotation == "B cells"),]
 
 # remove non bcells
-bcells_metainf <- bcells_metainf[grep("B cells",bcells_metainf$monaco_fine_annotation),]
+bcells_metainf1 <- bcells_metainf[grep("B cells",bcells_metainf$monaco_fine_pruned_labels),]
+bcells_metainf2 <- bcells_metainf[grep("Plasmablasts",bcells_metainf$monaco_fine_pruned_labels),]
+bcells_metainf <- rbind(bcells_metainf1,bcells_metainf2)
+
 bcells <- bcells[,which(colnames(bcells) %in% rownames(bcells_metainf))]
 
 bcells <- FindVariableFeatures(bcells, selection.method = "vst", nfeatures = 2000)
@@ -345,7 +348,30 @@ bcells.markers %>%
     dplyr::filter(avg_log2FC > 1) %>%
     slice_head(n = 10) %>%
     ungroup() -> top10
+
 DoHeatmap(bcells, features = top10$gene) + NoLegend()
+
+```
+
+More featureplots.
+
+```{r,bcellfeatureplots}
+
+# b cell markers
+FeaturePlot(bcells, features = c("CD19","CD27","CD38","CD24"))
+FeaturePlot(bcells, features = c("CR2", "CD34", "MME", "MS4A1"))
+FeaturePlot(bcells, features = c("MZB1", "CXCR3", "FCRL5", "TBX21"))
+FeaturePlot(bcells, features = c("CCR6", "ITGAX","MX1","BST2"))
+
+# IGH genes
+genes <- rownames(bcells)[grep("^IGH",rownames(bcells))]
+genes
+
+lapply(seq(1,61,4), function(i) {
+  j=i+3
+  mygenes <- genes[i:j]
+  FeaturePlot(bcells, features = mygenes )
+})
 
 ```
 
@@ -508,6 +534,80 @@ names(bcellsubtypes) <- unique(bcells@meta.data$monaco_fine_annotation)
 v1 <- c(bcellseuratclusters,bcellsubtypes)
 
 plot(euler(v1),quantities = list(cex = 1.0), labels = list(cex = 1.5))
+
+```
+
+## Now just zoom in on marker genes in FLW samples
+
+```{r,flw1}
+
+flw_metainf <- meta_inf[grep("flw",meta_inf$cell_id),]
+flw_metainf <- flw_metainf[which(flw_metainf$monaco_broad_annotation == "B cells"),]
+flw <- comb[,which(colnames(comb) %in% rownames(flw_metainf))]
+
+
+# remove non bcells
+flw_metainf1 <- flw_metainf[grep("B cells",flw_metainf$monaco_fine_pruned_labels),]
+flw_metainf2 <- flw_metainf[grep("Plasmablasts",flw_metainf$monaco_fine_pruned_labels),]
+flw_metainf <- rbind(flw_metainf1,flw_metainf2)
+
+flw <- flw[,which(colnames(flw) %in% rownames(flw_metainf))]
+
+flw <- FindVariableFeatures(flw, selection.method = "vst", nfeatures = 2000)
+
+flw <- RunPCA(flw, features = VariableFeatures(object = bcells))
+
+DimHeatmap(flw, dims = 1:2, cells = 500, balanced = TRUE)
+
+DimHeatmap(flw, dims = 3:4, cells = 500, balanced = TRUE)
+
+ElbowPlot(flw)
+#comb <- JackStraw(comb, num.replicate = 100)
+flw <- FindNeighbors(flw, dims = 1:4)
+
+flw <- FindClusters(flw, algorithm = 3, resolution = 0.3, verbose = FALSE)
+
+flw <- RunUMAP(flw, dims = 1:4)
+
+DimPlot(flw, reduction = "umap", label=TRUE,)
+
+DimPlot(flw, group.by="monaco_fine_annotation" , reduction = "umap", label=TRUE,)
+
+flw.markers <- FindAllMarkers(flw, only.pos = TRUE)
+
+flw.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+flw.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+
+DoHeatmap(flw, features = top10$gene) + NoLegend()
+
+```
+
+More B cell heat maps.
+
+```{r,flw2}
+
+# b cell markers
+FeaturePlot(flw, features = c("CD19","CD27","CD38","CD24"))
+FeaturePlot(flw, features = c("CR2", "CD34", "MME", "MS4A1"))
+FeaturePlot(flw, features = c("MZB1", "CXCR3", "FCRL5", "TBX21"))
+FeaturePlot(flw, features = c("CCR6", "ITGAX","MX1","BST2"))
+
+# IGH genes
+genes <- rownames(bcells)[grep("^IGH",rownames(bcells))]
+genes
+
+lapply(seq(1,61,4), function(i) {
+  j=i+3
+  mygenes <- genes[i:j]
+  FeaturePlot(flw, features = mygenes )
+})
 
 ```
 
