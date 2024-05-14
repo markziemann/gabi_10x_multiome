@@ -25,8 +25,42 @@ for BAM in $(find . | grep atac | grep _bam.bam$ ) ; do
     samtools view -H $BAM > $SAMOUT
     samtools view $BAM | grep -Ff $SAMPLE.bc.tmp >> $SAMOUT
     samtools view -bS $SAMOUT > $BAMOUT && rm $SAMOUT
+    samtools index $BAMOUT
 
   done
+
+done
+
+
+# Make bedgraph format of ATAC signal for the different major cell types for FLW samples
+# TET2 HG38
+REGION=chr4:105013948-105412731
+G=ref_combined1/ref_combined1/fasta/genome.fa.g
+
+for CELLTYPE in $(find . | grep atac_possorted | grep -v bam.bam | grep bam$ | rev | cut -d '/' -f1 | rev | sed 's/atac_possorted_//' | sort -u) ; do
+
+  echo $CELLTYPE
+
+  BEDGRAPH=$CELLTYPE.bdg.gz
+
+  for BAM in $(find | grep FLW | grep $CELLTYPE$) ; do
+
+    samtools view -H $BAM > header.sam
+
+    BAI=$BAM.bai
+
+    if [ ! -r $BAI ] ; then samtools index $BAM ; fi
+
+    samtools view $BAM $REGION
+
+  done > tmp.sam
+
+  cat header.sam tmp.sam \
+  | samtools view -bS \
+  | samtools sort \
+  | bamToBed   \
+  | bedtools genomecov -i - -bg -g $G \
+  | pigz > $BEDGRAPH
 
 done
 
