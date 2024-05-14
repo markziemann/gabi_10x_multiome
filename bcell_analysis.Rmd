@@ -321,7 +321,7 @@ cellgroups <- cellgroups[!is.na(names(cellgroups) )]
 
 cellgroups <- stack(cellgroups)
 
-write.table(cellgroups, file="cellgroups.tsv",sep="\t")
+write.table(cellgroups, file="cellgroups.tsv",sep="\t",quote=FALSE,row.names=FALSE)
 
 ```
 
