@@ -303,6 +303,28 @@ DimPlot(comb, label=TRUE, group.by = "monaco_broad_annotation", reduction = "uma
 
 ```
 
+Extract cell groups for ATAC tracks.
+
+```{r,cellgroups}
+
+cellgroupnames <- unique(comb@meta.data$monaco_broad_pruned_labels)
+
+cellgroups <- lapply( cellgroupnames , function(x) {
+  rownames(comb@meta.data[which(comb@meta.data$monaco_broad_pruned_labels == x),])
+} )
+
+names(cellgroups) <- cellgroupnames
+
+str(cellgroups)
+
+cellgroups <- cellgroups[!is.na(names(cellgroups) )]
+
+cellgroups <- stack(cellgroups)
+
+write.table(cellgroups, file="cellgroups.tsv",sep="\t")
+
+```
+
 Extract B cells
 
 ```{r,heat1}
