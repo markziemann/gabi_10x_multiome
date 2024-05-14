@@ -41,7 +41,7 @@ for CELLTYPE in $(find . | grep atac_possorted | grep -v bam.bam | grep bam$ | r
 
   echo $CELLTYPE
 
-  BEDGRAPH=$CELLTYPE.bdg.gz
+  BEDGRAPH=$CELLTYPE.profile
 
   for BAM in $(find | grep FLW | grep $CELLTYPE$) ; do
 
@@ -59,8 +59,9 @@ for CELLTYPE in $(find . | grep atac_possorted | grep -v bam.bam | grep bam$ | r
   | samtools view -bS \
   | samtools sort \
   | bamToBed   \
-  | bedtools genomecov -i - -bg -g $G \
-  | pigz > $BEDGRAPH
+  | bedtools genomecov -i - -bga -g $G \
+  |  awk '{OFS="\t"} {print $1,$2,$4"@"$1,$3,$4}' \
+  | tr '@' '\n' > $BEDGRAPH
 
 done
 

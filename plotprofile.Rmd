@@ -1,0 +1,149 @@
+---
+title: "Gabi ATAC analysis"
+author: "Burnet Bioinformatics group"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    fig_width: 7
+    fig_height: 7
+theme: cosmo
+---
+
+## Introduction
+
+We are interested in ATAC coverage around the TET2 gene: chr4:105013948-105412731
+
+Here are the number of reads for the celltype split BAMs.
+
+./FLW3/outs/atac_possorted_b_cells.bam 55042641
+./FLW3/outs/atac_possorted_dendritic_cells.bam 31361602
+./FLW3/outs/atac_possorted_monocytes.bam 77831616
+./FLW3/outs/atac_possorted_nk_cells.bam 46527668
+./FLW3/outs/atac_possorted_t_cells.bam 247420471
+
+./FLW5/outs/atac_possorted_b_cells.bam 21031930
+./FLW5/outs/atac_possorted_dendritic_cells.bam 52944321
+./FLW5/outs/atac_possorted_monocytes.bam 90573275
+./FLW5/outs/atac_possorted_nk_cells.bam 47252636
+./FLW5/outs/atac_possorted_t_cells.bam 57226673
+
+```{r,plot1,fig.height=15,fig.width=8}
+
+par(mfrow=c(6,1))
+mar = c(3.1, 2.1, 2.1, 1.1)
+# B CELLS
+SCALE=76074571
+x <- read.table("b_cells.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="",)
+mtext("B cells") #3.4177
+
+# DENDRITIC CELLS
+SCALE=84305923
+x <- read.table("dendritic_cells.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="")
+mtext("Dendritic cells")
+
+# MONOCYTES
+SCALE=168404891
+x <- read.table("monocytes.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="")
+mtext("Monocytes") #3.390638
+
+# NK CELLS
+SCALE=93780304
+x <- read.table("nk_cells.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="")
+mtext("NK cells")
+
+# T CELLS
+SCALE=304647144
+x <- read.table("t_cells.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="")
+mtext("T cells")
+
+# gene feature
+#chr4:105146876-105279803
+plot(x$V2,x$V3,type="p",cex=0,bty="n",ylim=c(0,2),xlab="chr4" , yaxt = "n", ylab="")
+text(105213340,1.5,"TET2",cex=2)
+arrows(x0=105146876,x1=105279803,y0=1,y1=1)
+
+```
+
+SVG output
+
+```{r,svgout1}
+
+svg("atac_profile.svg",height=15,width=10)
+
+par(mfrow=c(6,1))
+mar = c(3.1, 2.1, 2.1, 1.1)
+# B CELLS
+SCALE=76074571
+x <- read.table("b_cells.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="",)
+mtext("B cells") #3.4177
+
+# DENDRITIC CELLS
+SCALE=84305923
+x <- read.table("dendritic_cells.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="")
+mtext("Dendritic cells")
+
+# MONOCYTES
+SCALE=168404891
+x <- read.table("monocytes.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="")
+mtext("Monocytes") #3.390638
+
+# NK CELLS
+SCALE=93780304
+x <- read.table("nk_cells.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="")
+mtext("NK cells")
+
+# T CELLS
+SCALE=304647144
+x <- read.table("t_cells.bam.profile")
+x <- subset(x,V1=="chr4")
+x <- subset(x,V2>=105013948 & V2<=105412731)
+plot(x$V2,x$V3/SCALE*1000000,type="l",bty="n",ylim=c(0,3.5), ylab="depth",xaxt = "n",xlab="")
+mtext("T cells")
+
+# gene feature
+#chr4:105146876-105279803
+plot(x$V2,x$V3,type="p",cex=0,bty="n",ylim=c(0,2),xlab="chr4" , yaxt = "n", ylab="")
+text(105213340,1.5,"TET2",cex=2)
+arrows(x0=105146876,x1=105279803,y0=1,y1=1)
+
+dev.off()
+
+```
+## Session information
+
+For reproducibilty.
+
+```{r,session}
+
+sessionInfo()
+
+```
